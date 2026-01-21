@@ -92,20 +92,41 @@ function md() {
 }
 
 function mdpdf() {
-  if [ -f "$2" ]; then
+  set -e
+  local function cmd() {
+    echo "[*] $*" >&2
+    "$@"
+  }
+  if [ "$#" -lt 1 ]; then
+    echo Error: invalid amount of arguments
+    echo 'mdpdf [input] [output]'
+    return 1
+  elif [ -f "$2" ]; then
     echo Error: output file exists
+    return 1
   elif [ ! -f "$1" ]; then
     echo Error: input file not found
+    return 1
   else
-    DATA_DIR="$(mktemp -d -p /tmp mdpdf.XXXXXXXX)"
-    mkdir $DATA_DIR
-    pandoc \
-      --from=markdown \
-      --to=pdf \
-      --data-dir $DATA_DIR \
-      -o $2 $1
-    rm -r $DATA_DIR
+    local input=$1
+    local output=${2:-"${1%.md}.pdf"}
+    echo "Use container? (y/N)"
+    read -r response
+    if [[ $response =~ ^([Yy][Ee][Ss]|[Yy])$ ]]; then
+      cmd podman run --rm \
+        --volume ".:/data" \
+        pandoc/extra "$input" -o "$output" --template eisvogel --syntax-highlighting=idiomatic
+    else
+      local data_dir="$(mktemp -d -p ${XDG_RUNTIME_DIR:-/tmp} mdpdf.XXXXXXXX)"
+      cmd pandoc \
+        --from=markdown \
+        --to=pdf \
+        --data-dir $data_dir \
+        -o $output $input
+      rm -rf $DATA_DIR
+    fi
   fi
+  set +e
 }
 
 function fuck() {
